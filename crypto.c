@@ -2,6 +2,7 @@
 #include <openssl/evp.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct p{
 	char param[1024];
@@ -37,9 +38,13 @@ int main(int argc, char *argv[])
 	setup(&public, &secKey);
 
 	printf("computing VRF on %s\n", argv[1]);
+	clock_t begin = clock();
 	n = VRF(&public, &secKey, argv[1], &output, &proof);
+	clock_t end = clock();
+	double time_spent = (double) (end-begin) / CLOCKS_PER_SEC;
 	printf("output: ");
 	printHash(output, n);
+	printf(" time taken: %f", time_spent);
 	printf("\nproof: ");
 	printHash(proof, 32);
 	printf("\n");
