@@ -15,8 +15,8 @@ int setup(params *pp, element_t *sk);
 int sign(params *pp, element_t *sk, char *input, unsigned char **signature);
 int verifySig(params *pp, unsigned char *signature, char *input);
 int VRF(params *pp, element_t *sk, char *input, unsigned char **output, unsigned char **proof);
-int checkVRF(params *pp, char *input, unsigned char *output, unsigned char *proof);
-int sha256(unsigned char *input, unsigned char *output);
+int checkVRF(params *pp, char *input, unsigned char *output, unsigned char *proof, int proofLen);
+int sha256(unsigned char *input, unsigned char *output, int inputLen);
 void printHash(unsigned char *hash, int len);
 
 
@@ -36,21 +36,27 @@ int main(int argc, char *argv[])
 	params public;
 	element_t secKey;
 	setup(&public, &secKey);
-
 	printf("computing VRF on %s\n", argv[1]);
 	clock_t begin = clock();
 	n = VRF(&public, &secKey, argv[1], &output, &proof);
 	clock_t end = clock();
 	double time_spent = (double) (end-begin) / CLOCKS_PER_SEC;
 	printf("output: ");
-	printHash(output, n);
+	printHash(output, 32);
 	printf(" time taken: %f", time_spent);
+	printf("\nproof size: %d", n);
 	printf("\nproof: ");
-	printHash(proof, 32);
+	printHash(proof, n);
 	printf("\n");
-
-	printf("checking correct verification... %d\n", checkVRF(&public, argv[1], output, proof));
-	printf("checking correct non-verification... %d\n", checkVRF(&public, argv[1], "glub", "glub"));
+	int ver = 0;
+	printf("checking correct verification... ");
+	begin = clock();
+	ver = checkVRF(&public, argv[1], output, proof, n);
+	end = clock();
+	time_spent = (double) (end-begin) / CLOCKS_PER_SEC;
+	printf("%d\n", ver);
+	printf("time taken: %f\n", time_spent);
+	printf("checking correct non-verification... %d\n", checkVRF(&public, argv[1], "glub", "glub", 4));
 
 }
 
@@ -84,7 +90,7 @@ int sign(params *pp, element_t *sk, char *input, unsigned char **signature)
 	element_init_G1(sig, pp->pairing);
 	
 	unsigned char hash[32];
-	sha256(input, hash);
+	sha256(input, hash, strlen(input));
 	element_from_hash(h, hash, 32);
 
 	element_pow_zn(sig, h, *sk);
@@ -114,7 +120,7 @@ int verifySig(params *pp, unsigned char *signature, char *input)
 	element_from_bytes(sig, signature);
 
 	unsigned char hash[32];
-	sha256(input, hash);
+	sha256(input, hash, strlen(input));
 	element_from_hash(h, hash, 32);
 
 	pairing_apply(temp1, sig, pp->g, pp->pairing);
@@ -135,28 +141,28 @@ int VRF(params *pp, element_t *sk, char *input, unsigned char **output, unsigned
 	int n = 0;
 	n = sign(pp, sk, input, proof);
 	*output = malloc(32);
-	sha256(*proof, *output);
+	sha256(*proof, *output, n);
 	return n;
 }
 
-int checkVRF(params *pp, char *input, unsigned char *output, unsigned char *proof)
+int checkVRF(params *pp, char *input, unsigned char *output, unsigned char *proof, int proofLen)
 {
 	//1 means success, 0 means failure
 	int success = 0;
 	unsigned char temp[32];
 	if(!verifySig(pp, proof, input)) return 0;
-	sha256(proof, temp);
-	if(!memcmp(output, temp, 32)==0) return 0;
+	sha256(proof, temp, proofLen);
+	if(!CRYPTO_memcmp(output, temp, 32)==0) return 0;
 	success = 1;
 	return success;
 }
 
-int sha256(unsigned char *input, unsigned char *output)
+int sha256(unsigned char *input, unsigned char *output, int inputLen)
 {
 	EVP_MD_CTX *mdctx = EVP_MD_CTX_create();
 	int md_len = 0;
 	EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
-	EVP_DigestUpdate(mdctx, input, strlen(input));
+	EVP_DigestUpdate(mdctx, input, inputLen);
 	EVP_DigestFinal_ex(mdctx, output, &md_len);
 	EVP_MD_CTX_destroy(mdctx);
 	return md_len;
