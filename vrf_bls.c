@@ -97,9 +97,9 @@ int sign(params *pp, element_t *sk, char *input, unsigned char **signature)
 	
 
 	element_clear(h);
-	n = element_length_in_bytes(sig);
+	n = element_length_in_bytes_x_only(sig);
 	*signature = malloc(n);
-	int q = element_to_bytes(*signature, sig);
+	int q = element_to_bytes_x_only(*signature, sig);
 
 	return n;
 }
@@ -117,7 +117,7 @@ int verifySig(params *pp, unsigned char *signature, char *input)
 	element_init_GT(temp1, pp->pairing);
 	element_init_GT(temp2, pp->pairing);
 	
-	element_from_bytes(sig, signature);
+	element_from_bytes_x_only(sig, signature);
 
 	unsigned char hash[32];
 	sha256(input, hash, strlen(input));
@@ -125,10 +125,18 @@ int verifySig(params *pp, unsigned char *signature, char *input)
 
 	pairing_apply(temp1, sig, pp->g, pp->pairing);
 	pairing_apply(temp2, h, pp->pk, pp->pairing);
-	if (!element_cmp(temp1, temp2))
+	if (!element_cmp(temp1, temp2)){
 		success = 1;
-	else
-		success = 0;
+	}
+	else{
+		element_invert(temp1, temp1);
+		if (!element_cmp(temp1, temp2)){
+			success = 1;
+		}
+		else{
+			success = 0;
+		}
+	}
 
 	element_clear(h);
 	element_clear(temp1);
